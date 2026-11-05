@@ -1,0 +1,102 @@
+import time
+import requests
+
+API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+BOT_TOKEN = "8938455877:AAEvzl8hX6ug_-3jC87n5XeyUhCY6KmbDdY"
+CHAT_ID = "@dalyprofitvip"
+
+last_period = None
+next_prediction = None
+target_numbers = []
+current_level = 1
+history_logs = []
+
+def send_telegram(text):
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(url, json={"chat_id": CHAT_ID, "text": text}, timeout=8)
+    except Exception as e:
+        print(f"Error: {e}")
+
+def get_report(period):
+    win_count = sum(1 for item in history_logs if item['status'] == 'WIN')
+    loss_count = sum(1 for item in history_logs if item['status'] == 'LOSS')
+    
+    report = (
+        "⚡ RAJ VIP 30S 24/7 AUTO CLOUD ⚡\n"
+        "════════════════════════\n"
+        "💎 GAME : WinGo 30S\n"
+        f"📅 PERIOD : {period}\n"
+        f"🎯 PREDICTION : {next_prediction}\n"
+        f"🎲 OPPOSITES : [ {', '.join(map(str, target_numbers))} ]\n"
+        f"📊 ACCURACY : {win_count} WIN / {loss_count} LOSS\n"
+        f"📈 MARTINGALE : LEVEL {current_level}\n"
+        "════════════════════════\n"
+    )
+    for log in history_logs[:3]:
+        icon = "[✔]" if log['status'] == 'WIN' else "[✖]"
+        report += f"{icon} Prd {log['period']} | {log['result']} | {log['status']}\n"
+        
+    report += "════════════════════════\nDM 👉 @PoolBetOfficial"
+    return report
+
+def main():
+    global last_period, next_prediction, target_numbers, current_level, history_logs
+    print("Bot loop started on cloud...")
+    
+    # 5 Ghante tak continuous chalega
+    end_time = time.time() + (5 * 3600)
+    
+    while time.time() < end_time:
+        try:
+            resp = requests.get(f"{API_URL}?t={int(time.time()*1000)}", timeout=5)
+            data = resp.json()
+
+            if data and data.get("data") and data["data"].get("list"):
+                items = data["data"]["list"]
+                current_issue = items[0]["issueNumber"]
+                actual_num = int(items[0]["number"])
+                actual_side = "BIG" if actual_num >= 5 else "SMALL"
+
+                if last_period != current_issue:
+                    if next_prediction and last_period:
+                        is_win = (next_prediction == actual_side) or (actual_num in target_numbers)
+                        if is_win:
+                            current_level = 1
+                        else:
+                            current_level = 1 if current_level >= 4 else current_level + 1
+                        
+                        history_logs.insert(0, {
+                            "period": last_period[-3:],
+                            "result": f"{actual_num} {actual_side}",
+                            "status": "WIN" if is_win else "LOSS"
+                        })
+
+                    last_period = current_issue
+
+                    # Strategy
+                    last5 = ["BIG" if int(x["number"]) >= 5 else "SMALL" for x in items[:5]]
+                    last_nums = [int(x["number"]) for x in items[:5]]
+
+                    if last5[0] == last5[1] and last5[1] == last5[2]:
+                        next_prediction = last5[0]
+                    else:
+                        next_prediction = "SMALL" if last5[0] == "BIG" else "BIG"
+
+                    sum_nums = sum(last_nums)
+                    if next_prediction == "BIG":
+                        target_numbers = [0, 2] if sum_nums > 20 else [1, 3]
+                    else:
+                        target_numbers = [7, 9] if sum_nums < 25 else [6, 8]
+
+                    upcoming = str(int(current_issue) + 1)
+                    send_telegram(get_report(upcoming))
+                    print(f"Sent: {upcoming}")
+
+        except Exception as e:
+            print(f"Loop error: {e}")
+
+        time.sleep(3)
+
+if __name__ == "__main__":
+    main()
